@@ -89,6 +89,10 @@ def dump_to_csv(coops):
     for coop in coops:
         print("%s;%s;%s" % (coop['nom'], coop['prenom'], coop['mail']))
 
+def dump_to_insert_indatabase(coops):
+    print(" DELETE from spip_pouvoir_membres;")
+    for coop in coops:
+        print(" INSERT INTO spip_pouvoir_membres( nom, prenom, email) VALUES (\"%s\", \"%s\", \"%s\") ; " % (coop['nom'], coop['prenom'], coop['mail']))
 
 def main():
     # Configure arguments parser
@@ -110,6 +114,7 @@ def main():
     coop_list = read_odoo_coops(at_date)
     save_to_xls("out.xls", args.date, coop_list)
     #dump_to_csv(coop_list)
+    #dump_to_insert_indatabase(coop_list)
 
 if __name__ == "__main__":
     main()
