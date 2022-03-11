@@ -52,10 +52,10 @@ def main():
     # Check arg format
     date_service = None
     try:
-        date_service = datetime.strptime(args.shift, '%Y-%m-%d %H:%M').\
+        date_service = datetime.strptime(args.shift, '%d/%m/%Y %H:%M').\
                 replace(tzinfo = tz.tzlocal())
     except Exception as e:
-        raise Exception('%s : Mauvais format de date (AAAA-MM-JJ HH:MM)' %\
+        raise Exception('%s : Mauvais format de date (JJ-MM-AAAA HH:MM)' %\
                 (args.shift))
 
     # Get member from Odoo
