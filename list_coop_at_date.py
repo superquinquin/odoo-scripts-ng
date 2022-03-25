@@ -37,6 +37,7 @@ def read_odoo_coops(at_date):
 
     partners = openerp.ResPartner.browse([
         ("is_member", "=", True),
+#        ("name", "like", "LEWIS%"),
         ("active", "in", [True, False])])
     for partner in partners:
         # Find all capital invoices for the partner
@@ -55,10 +56,11 @@ def read_odoo_coops(at_date):
         try:
             (nom, prenom) = partner.name.split(',')
             coop = {
+                'id' : partner.id, 
                 'nom' : nom.strip(),
                 'prenom' : prenom.strip(),
                 'mail' : partner.email,
-                'address' : "%s %s %s" % (partner.street, partner.zip, partner.city),
+                'address' : "%s %s %s " % (partner.street, partner.zip, partner.city),
                 'parts' : partner.total_partner_owned_share,
                 'capital' : int(capital)
                 }
@@ -89,6 +91,12 @@ def dump_to_csv(coops):
     for coop in coops:
         print("%s;%s;%s" % (coop['nom'], coop['prenom'], coop['mail']))
 
+# curl -X POST -F data=@path/to/file.csv -F columns=address  https://api-adresse.data.gouv.fr/search/csv/
+def dump_to_address(coops):
+    print("%s;%s" % ('Id', 'Adresse'))
+    for coop in coops:
+        print("%s;%s" % (coop['id'], coop['address']))
+
 def dump_to_insert_indatabase(coops):
     print(" DELETE from spip_pouvoir_membres;")
     for coop in coops:
@@ -115,6 +123,7 @@ def main():
     save_to_xls("out.xls", args.date, coop_list)
     #dump_to_csv(coop_list)
     #dump_to_insert_indatabase(coop_list)
+    dump_to_address(coop_list)
 
 if __name__ == "__main__":
     main()
