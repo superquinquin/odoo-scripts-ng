@@ -2,11 +2,11 @@
 # -*- encoding: utf-8 -*-
 
 
-import sys
 import argparse
 import erppeek
+import xmlrpc.client
 
-from cfg_secret_configuration import odoo_configuration_user_test as odoo_configuration_user
+from cfg_secret_configuration import odoo_configuration_user_prod as odoo_configuration_user
 
 ###############################################################################
 # Odoo Connection
@@ -34,31 +34,68 @@ def parse_args():
     parser.add_argument('total_max', help='The total max number of seats')
     parser.add_argument('abcd_max', help='The max number of abcd seats')
     parser.add_argument('ftop_max', help='The max number of ftop seats')
+    parser.add_argument('--fill-ftop-to-max', dest='ftop_to_max',
+                        default=False, action='store_true')
 
     return parser.parse_args()
 
-def set_max_limits(shift, total_max, abcd_max, ftop_max):
-    shift.seats_max = total_max
-    print(shift.name, shift.day, shift.seats_availability, shift.seats_max)
+def get_standard_available_seats(shift):
+    avail_seats = 0
+    for ticket in shift.shift_ticket_ids:                                       
+        if ticket.shift_type == 'standard':
+            avail_seats = ticket.seats_available
+            return avail_seats
+
+def reset_ftop_seats(shift):
+    for ticket in shift.shift_ticket_ids:                                       
+        if ticket.shift_type == 'ftop':
+            ticket.seats_max = 0
+
+def set_max_limits(shift, total_max, abcd_max, ftop_max, ftop_to_max):
+    # Reset ftop seats
+    reset_ftop_seats(shift)
+    # Get available standard seats
+    abcd_avail = get_standard_available_seats(shift)
+
     for ticket in shift.shift_ticket_ids:                                       
         if ticket.shift_type == 'standard':
             ticket.seats_max = abcd_max
         elif ticket.shift_type == 'ftop':
-            ticket.seats_max = ftop_max
+            if ftop_to_max:
+                ticket.seats_max = (total_max - abcd_max) + abcd_avail
+            else:
+                ticket.seats_max = ftop_max
         print(ticket.shift_type, ticket.seats_max) 
+
+    # Set total max seats for shift
+    try:
+        shift.seats_max = total_max
+    except:
+        pass
+
+    print(shift.name, shift.day, shift.seats_availability, shift.seats_max)
+
 
 def main():
     # Configure arguments parser
     args = parse_args()
+    print(args.ftop_to_max)
 
     shift_templates = openerp.ShiftTemplate.browse([
         ("active", "=", True),
-        ("shift_type_id", "=", 1),
-        ("tu", "=", False)
+        ("shift_type_id", "=", 1)
+#        ("tu", "=", False)
         ])
     for tmpl in shift_templates:
         print(tmpl, tmpl.shift_type_id)
-        set_max_limits(tmpl, args.total_max, args.abcd_max, args.ftop_max)
+        set_max_limits(tmpl, int(args.total_max), int(args.abcd_max),
+                       int(args.ftop_max), args.ftop_to_max)
 
 if __name__ == "__main__":
     main()
+    #tmpl = openerp.ShiftTemplate.get(147)
+    #set_max_limits(tmpl, 12, 8, 0, True)
+
+
+
+
