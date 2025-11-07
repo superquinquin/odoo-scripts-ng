@@ -1,0 +1,17 @@
+[project]
+name = "odoo-scripts-ng"
+version = "0.1.0"
+description = "Odoo management scripts"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "erppeek",
+    "openpyxl",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = []
