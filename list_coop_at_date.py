@@ -2,19 +2,21 @@
 # -*- encoding: utf-8 -*-
 
 
-import sys
 import erppeek
 import argparse
 
 from datetime import datetime
-from openpyxl import load_workbook, Workbook
+from openpyxl import Workbook
 
-from cfg_secret_configuration\
-        import odoo_configuration_user_test as odoo_configuration_user
+from cfg_secret_configuration import (
+    odoo_configuration_user_prod as odoo_configuration_user,
+)
 
 ###############################################################################
 # Odoo Connection
 ###############################################################################
+
+
 def init_openerp(url, login, password, database):
     openerp = erppeek.Client(url)
     uid = openerp.login(login, password=password, database=database)
@@ -22,108 +24,138 @@ def init_openerp(url, login, password, database):
     tz = user.tz
     return openerp, uid, tz
 
+
 openerp, uid, tz = init_openerp(
-    odoo_configuration_user['url'],
-    odoo_configuration_user['login'],
-    odoo_configuration_user['password'],
-    odoo_configuration_user['database'])
+    odoo_configuration_user["url"],
+    odoo_configuration_user["login"],
+    odoo_configuration_user["password"],
+    odoo_configuration_user["database"],
+)
 
 ###############################################################################
 # Script
 ###############################################################################
 
+
 def read_odoo_coops(at_date):
     odoo_coops = []
 
-    partners = openerp.ResPartner.browse([
-        ("is_member", "=", True),
-#        ("name", "like", "LEWIS%"),
-        ("active", "in", [True, False])])
+    partners = openerp.ResPartner.browse(
+        [("is_member", "=", True), ("active", "in", [True, False])]
+    )
     for partner in partners:
         # Find all capital invoices for the partner
         capital = 0
-        for invoice in openerp.AccountInvoice.browse([
+        for invoice in openerp.AccountInvoice.browse(
+            [
                 ("partner_id", "=", partner.id),
                 ("is_capital_fundraising", "=", True),
                 ("state", "=", "paid"),
-                ("date_invoice", "!=", False)]):
-            invoice_date = datetime.strptime(invoice.date_invoice, '%Y-%m-%d')
+                ("date_invoice", "!=", False),
+            ]
+        ):
+            invoice_date = datetime.strptime(invoice.date_invoice, "%Y-%m-%d")
             if invoice_date < at_date:
                 capital += invoice.amount_total_signed
         # If total amount of capital bought before 2020 is null, skip the coop
         if capital == 0:
             continue
         try:
-            (nom, prenom) = partner.name.split(',')
-            coop = {
-                'id' : partner.id, 
-                'nom' : nom.strip(),
-                'prenom' : prenom.strip(),
-                'mail' : partner.email,
-                'address' : "%s %s %s " % (partner.street, partner.zip, partner.city),
-                'parts' : partner.total_partner_owned_share,
-                'capital' : int(capital)
-                }
-            odoo_coops.append(coop)
-        except:
             print(partner.name)
-            continue
+            (nom, prenom) = partner.name.split(",")
+        except:
+            nom = partner.name
+            prenom = ""
+        coop = {
+            "id": partner.id,
+            "nom": nom.strip(),
+            "prenom": prenom.strip(),
+            "mail": partner.email,
+            "address": "%s %s %s "
+            % (partner.street, partner.zip, partner.city),
+            "parts": partner.total_partner_owned_share,
+            "capital": int(capital),
+        }
+        odoo_coops.append(coop)
     return odoo_coops
+
 
 def save_to_xls(file_name, date, coops):
     DST_FILE = file_name
     next_row = 1
     wb = Workbook()
     ws = wb.active
-    ws.title = 'Capital parts A au ' + date.replace('/', '-')
+    ws.title = "Capital parts A au " + date.replace("/", "-")
 
-    ws.append(('Nom', 'Prenom', 'Adresse', 'Nb de parts', 'Capital'))
+    ws.append(("Nom", "Prenom", "Adresse", "Nb de parts", "Capital"))
     next_row += 1
 
     for coop in coops:
-        ws.append((coop['nom'], coop['prenom'], coop['address'], coop['parts'], coop['capital']))
+        ws.append(
+            (
+                coop["nom"],
+                coop["prenom"],
+                coop["address"],
+                coop["parts"],
+                coop["capital"],
+            )
+        )
         next_row += 1
 
-    wb.save(filename = DST_FILE)
+    wb.save(filename=DST_FILE)
+
 
 def dump_to_csv(coops):
-    print("%s;%s;%s" % ('Nom', 'Prenom', 'Email'))
+    print("%s;%s;%s" % ("Nom", "Prenom", "Email"))
     for coop in coops:
-        print("%s;%s;%s" % (coop['nom'], coop['prenom'], coop['mail']))
+        print("%s;%s;%s" % (coop["nom"], coop["prenom"], coop["mail"]))
+
 
 # curl -X POST -F data=@path/to/file.csv -F columns=address  https://api-adresse.data.gouv.fr/search/csv/
+
+
 def dump_to_address(coops):
-    print("%s;%s" % ('Id', 'Adresse'))
+    print("%s;%s" % ("Id", "Adresse"))
     for coop in coops:
-        print("%s;%s" % (coop['id'], coop['address']))
+        print("%s;%s" % (coop["id"], coop["address"]))
+
 
 def dump_to_insert_indatabase(coops):
     print(" DELETE from spip_pouvoir_membres;")
     for coop in coops:
-        print(" INSERT INTO spip_pouvoir_membres( nom, prenom, email) VALUES (\"%s\", \"%s\", \"%s\") ; " % (coop['nom'], coop['prenom'], coop['mail']))
+        print(
+            ' INSERT INTO spip_pouvoir_membres( nom, prenom, email) VALUES ("%s", "%s", "%s") ; '
+            % (coop["nom"], coop["prenom"], coop["mail"])
+        )
+
 
 def main():
     # Configure arguments parser
     parser = argparse.ArgumentParser(
-            description=('Liste les cooperateurs',
-            ' possesseurs de parts à une date donnée'))
-    parser.add_argument('date',
-            help='Date effective (31/12/2022)')
+        description=(
+            "Liste les cooperateurs possesseurs de parts à une date donnée"
+        )
+    )
+    parser.add_argument("date", help="Date effective (31/12/2022)")
     args = parser.parse_args()
 
     # Check arg format
     at_date = None
     try:
-        at_date = datetime.strptime(args.date, '%d/%m/%Y')
+        at_date = datetime.strptime(args.date, "%d/%m/%Y")
     except Exception as e:
-        raise Exception('%s : Mauvais format de date (JJ/MM/AAAA)' %\
-                (args.date))
+        raise Exception(
+            "%s : Mauvais format de date (JJ/MM/AAAA)" % (args.date)
+        )
 
     coop_list = read_odoo_coops(at_date)
-    save_to_xls("out.xls", args.date, coop_list)
-    #dump_to_csv(coop_list)
-    #dump_to_insert_indatabase(coop_list)
-    dump_to_address(coop_list)
+    save_to_xls(
+        f"liste_coop_{args.date.replace('/', '_')}.xls", args.date, coop_list
+    )
+    # dump_to_csv(coop_list)
+    # dump_to_insert_indatabase(coop_list)
+    # dump_to_address(coop_list)
+
 
 if __name__ == "__main__":
     main()
